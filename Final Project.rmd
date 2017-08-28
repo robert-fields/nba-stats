@@ -1,7 +1,4 @@
 ---
-title: "Do the Warriors *really* play the right way?"
-author: "Robert Fields"
-date: "August 23, 2017"
 output:
   html_document:
     theme: flatly
@@ -11,6 +8,10 @@ output:
 
 ```{r setup, echo = TRUE, message = FALSE, include=FALSE, warning = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+list.of.packages <- c("tidyverse", "plotly","DT","knitr")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+
 library(tidyverse)
 library(jsonlite)
 library(plotly)
@@ -18,8 +19,11 @@ library(DT)
 library(knitr)
 library(stringr)
 ```
+<img src = "https://raw.githubusercontent.com/robert-fields/nba-stats/master/nba-stats-logo.JPG" height = 100 width = 320 hspace = 25 vspace = 25 align = right>
 
-<img src = "C:\\Users\\fielrg17\\Google Drive\\MSBA Classses\\Intro to R\\nba-stats-logo.svg" height = 125 width = 400 align = right>
+# Do the Warriors *really* play the right way?
+#### Robert Fields
+#### August 23, 2017
 
 # {.tabset}
 ## Introduction
@@ -28,7 +32,7 @@ library(stringr)
 
 #### Which NBA players make their teammates better?
 
-Anyone that follows professional basketball knows that the NBA has realized a talent boom in the last 5-10 years. Popularity, attention, and league-wide revenue has been growing, as well as punditry and data. Fans of the league are riveted by such important, profound questions such as ["is Kevin Durant a cupcake?](https://www.sbnation.com/lookit/2017/2/11/14589144/thunder-fans-are-chanting-cupcake-at-kevin-durant-heres-why)
+Anyone that follows professional basketball knows that the NBA has realized a talent boom in the last 5-10 years. Popularity, attention, and league-wide revenue has been growing, as well as punditry and data. Fans of the league are riveted by such important, profound questions such as ["is Kevin Durant a cupcake?"](https://www.sbnation.com/lookit/2017/2/11/14589144/thunder-fans-are-chanting-cupcake-at-kevin-durant-heres-why)
 
 More importantly, the NBA is on the cutting-edge of data collection in sports. Thanks to the NBA's partnership with [STATS SportVU](https://www.stats.com/sportvu-basketball-media/), they are tracking data well beyond the box score most of us have seen in a newspaper. SportVU is a system of 6 cameras hung from the ceiling that track ball and player movement 25 times per second to produce metrics such as secondary assists, miles traveled, made field goals defended at rim, and one frequency on pick and rolls, etc.
 
@@ -80,7 +84,7 @@ Further iterations on this question would allow teams to understand not only whi
 
 ## Packages & Data Prep {.tabset}
 ### Packages Used
-```{r packages, echo = TRUE, message = FALSE, include = TRUE, warning = FALSE}
+```
   # Packages Required
   library(tidyverse) # used for several functions in r, including dplyr, ggplot2, etc.
   library(jsonlite) # used to convert JSON files to dataframes
@@ -91,17 +95,9 @@ Further iterations on this question would allow teams to understand not only whi
 
 ### Data Set {.tabset}
 
-I had to compile two data sets for **Team** data and **Player** data. I did this by linking to the JSON URL from the [stats.nba.com](stats.nba.com) website HTML and using the "jsonlite" package to scrape this data and flatten it into data frames. I used a loop to tidy up this repetitive process.
+#### Compilation
 
-I combined all of these data frames into two single data sets. I also pulled Real Plus/Minus data from ESPN, converted it into a .csv and imported that. I was able to merge all the JSON dataframes and the csv based on either a Player ID from nba.com or the Player Name. I had to clean up the 'Name' variable from ESPN to match the NBA data. I also joined data from the `team_data` set to the `player_data` set to make some comparisons between teams and players.
-
-I created a variable `TEAM_RPM_SHARE` in the `player_data` set that weighted a player's `RPM` by the minutes he played during the season. I then aggregated this by team to create a `TEAM_RPM` variable in the `team_data` set. This is the variable I use as a baseline for team performance based on the players they have on their team. I did the same thing with RPM `WINS`, creating the `TEAM_RPM_WINS` variable in the `team_data` set.
-
-I dropped any unneccessary variables (the NBA JSON files provided separate variables to rank all the included variables, etc.). I started with a couple hundred variables, but pared this down to 39 variables for **Team** data and 67 variables for **Player** data that might be of interest later on.
-
-I have included a data dictionary with details on what each variable is. A more in depth look at different statistics used for NBA data can be found in [the NBA stats glossary](stats.nba.com/help/glossary).
-
-```{r nba_data_import, echo = TRUE, message = FALSE, warning = FALSE}
+```{r nba_data_import, echo = TRUE, message = FALSE, warning = FALSE, results = 'hide'}
 
 
 # Import json files from web
@@ -223,8 +219,56 @@ player_data <-
              aggregate(player_data$WINS ~ player_data$TEAM_ID,player_data, sum),
              by = c("TEAM_ID" = "player_data$TEAM_ID")) %>%
    rename("TEAM_RPM_WINS" = "player_data$WINS")
- 
+
+ player_data <- player_data %>%
+  left_join(mutate(team_data,
+            TEAM_RPM_WINS = TEAM_RPM_WINS,
+            TEAM_RPM = TEAM_RPM)[,c("TEAM_ID","TEAM_RPM_WINS",
+                                    "TEAM_RPM")],
+            by = "TEAM_ID")
+
 ```
+
+I have included a data dictionary with details on what each variable is below each data set on their respective tabs. A more in depth look at different statistics used for NBA data can be found in [the NBA stats glossary](stats.nba.com/help/glossary).
+
+I had to compile two data sets for **Team** data and **Player** data. I did this by linking to the JSON URL from the [stats.nba.com](stats.nba.com) website HTML and using the "jsonlite" package to scrape this data and flatten it into data frames. I used a loop to tidy up this repetitive process.
+
+```
+data_list <- list(NULL)
+for(i in seq_along(json_urls)){
+  foo <- fromJSON(paste(readLines(json_urls[i])),
+                  simplifyDataFrame = TRUE,
+                  flatten = TRUE)
+  flat_file <- flatten(foo$resultSets)
+  foo <- data.frame(flat_file$rowSet)
+  colnames(foo) <- t(data.frame(flat_file$headers))
+  data_list[i] <- list(foo)
+  print(i)
+  }
+data_list <- setNames(data_list, nm = json_names)
+```
+
+I combined all of these data frames into two single data sets. I also pulled Real Plus/Minus data from ESPN, converted it into a .csv and imported that. I was able to merge all the JSON dataframes and the csv based on either a Player ID from nba.com or the Player Name. I had to clean up the 'Name' variable from ESPN to match the NBA data. I also joined data from the `team_data` set to the `player_data` set to make some comparisons between teams and players.
+
+I created a variable `TEAM_RPM_SHARE` in the `player_data` set that weighted a player's `RPM` by the minutes he played during the season. I then aggregated this by team to create a `TEAM_RPM` variable in the `team_data` set. This is the variable I use as a baseline for team performance based on the players they have on their team. I did the same thing with RPM `WINS`, creating the `TEAM_RPM_WINS` variable in the `team_data` set.
+
+```
+mutate(player_data, TEAM_RPM_SHARE = (RPM * (GP * MIN) / (TEAM_MIN)))
+
+left_join(team_data,
+     aggregate(player_data$TEAM_RPM_SHARE ~ player_data$TEAM_ID,
+       player_data, sum),
+       by = c("TEAM_ID" = "player_data$TEAM_ID")) %>%
+   rename("TEAM_RPM" = "player_data$TEAM_RPM_SHARE")
+```
+
+I dropped any unneccessary variables (the NBA JSON files provided separate variables to rank all the included variables, etc.). I started with a couple hundred variables, but pared this down to 39 variables for **Team** data and 67 variables for **Player** data that might be of interest later on.
+
+``` {r echo = FALSE, warnings = FALSE, message = FALSE}
+glimpse(team_data)
+glimpse(player_data)
+```
+
 
 #### Player Data
 
@@ -243,7 +287,7 @@ datatable(player_data,
                          filter = "top",
                          orderMulti = TRUE,
                          columnDefs =
-                           list(list(visible = FALSE, targets = c(1,3)))))
+                           list(list(visible = FALSE, targets = c(1,3,5:50)))))
 
 ```
 
@@ -285,7 +329,9 @@ VarType<- c("PLAYER_NAME",
             "WINS",
             "TEAM_PIE",
             "TEAM_PLUS_MINUS",
-            "TEAM_WINS")
+            "TEAM_WINS",
+            "TEAM_RPM_WINS",
+            "TEAM_RPM")
 
 VarDesc<-c("Player Name",
            "3-letter abbreviation of team name",
@@ -320,10 +366,12 @@ VarDesc<-c("Player Name",
            "RPM Wins (similar to win share, or number of wins a player contributes to his team's win total)",
            "Team Player Impact Estimate (overall PIE of the team a player is on)",
            "Team Plus Minus (Overall Plus Minus of team a player is on)",
-           "Team Wins (overall wins of the team a player is on, including games in which a player did not play)")
+           "Team Wins (overall wins of the team a player is on, including games in which a player did not play)",
+           "Aggregate of RPM Wins (predicted wins a player contributes to a team)",
+           "Aggregate of RPM for all players on a team, weighted by minutes played)")
 Data_Dictionary<- as.data.frame(cbind(VarType,VarDesc))
-colnames(Data_Dictionary)<-c("Data Type","Variable Description")
-kable(Data_Dictionary, caption = "Data Dictionary")
+colnames(Data_Dictionary)<-c("Variable Name","Variable Description")
+kable(Data_Dictionary, caption = "Data Dictionary of relevant variables")
 ```
 
 #### Team Data
@@ -343,7 +391,7 @@ datatable(team_data,
                          filter = "top",
                          orderMulti = TRUE,
                          columnDefs =
-                           list(list(visible = FALSE, targets = 1))))
+                           list(list(visible = FALSE, targets = c(1,3:26)))))
 
 ```
 
@@ -390,8 +438,8 @@ VarDesc<-c("Team Name",
            "Assist to Turnover Ratio",
            "Team Real Plus Minus")
 Data_Dictionary<- as.data.frame(cbind(VarType,VarDesc))
-colnames(Data_Dictionary)<-c("Variable","Description")
-kable(Data_Dictionary, caption = "Data Dictionary")
+colnames(Data_Dictionary)<-c("Variable Name","Description")
+kable(Data_Dictionary, caption = "Data Dictionary of relevant variables")
 
 ```
 
@@ -419,8 +467,9 @@ ggplotly(
 ## Analysis
 
 In thinking through how I wanted to approach my analysis, I settled on two different questions:
-  1. How do teams perform against a baseline of being the "sum of their parts"?
-  2. Which players are responsible for this performance?
+
+1. How do teams perform against a baseline of being the "sum of their parts"?
+2. Which players are responsible for this performance?
 
 For the first question, I compared `TEAM_RPM` vs. `NET_RATING` for each team. I also compared `TEAM_RPM_WINS` vs. `W`. The RPM statistics are produced by ESPN and adjusted to be a representation of a player's contribution to his team, independent of teammates or opponents. Therefore, when aggregated these statistics should represent the sum of each player's individual contribution.
 
