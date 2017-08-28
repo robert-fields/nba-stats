@@ -1,3 +1,6 @@
+list.of.packages <- c("tidyverse", "plotly","DT","knitr")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
 
 library(tidyverse)
 library(jsonlite)
@@ -64,9 +67,9 @@ player_data <-
   data_list[[1]] %>%
   left_join(data_list[[2]][,c("PLAYER_ID","PCT_AST_FGM","PCT_UAST_FGM")],
           by = "PLAYER_ID") %>%
-  left_join(data_list[[3]][,c("PLAYER_NAME","FG2M")],
+  left_join(data_list[[3]][,c("PLAYER_NAME","DFG2M")],
             by = "PLAYER_NAME") %>%
-  left_join(data_list[[4]][,c("PLAYER_NAME","FG3M")],
+  left_join(data_list[[4]][,c("PLAYER_NAME","DFG3M")],
             by = "PLAYER_NAME") %>%
   left_join(data_list[[5]][,c("PLAYER_NAME","D_FG_PCT")],
             by = "PLAYER_NAME") %>%
@@ -126,6 +129,13 @@ team_data <-
  rename("TEAM_RPM_WINS" = "player_data$WINS") %>%
  select(-(GP_RANK:CFPARAMS))
 
+player_data <- player_data %>%
+  left_join(mutate(team_data,
+            TEAM_RPM_WINS = TEAM_RPM_WINS,
+            TEAM_RPM = TEAM_RPM)[,c("TEAM_ID","TEAM_RPM_WINS",
+                                    "TEAM_RPM")],
+            by = "TEAM_ID")
+
 # plot useful exploratory charts
 
 # KEEP
@@ -155,4 +165,12 @@ ggplotly(
     geom_smooth(method = "glm") +
     geom_abline())
 
+library(leaps)
+
+summary(regsubsets((TEAM_RPM_WINS - TEAM_WINS) ~ .,
+           data = player_data, method = "backward"))
+
+summary(glm((TEAM_RPM_WINS - TEAM_WINS) ~ player_data, data = player_data))
+
+summary(lm((TEAM_RPM_WINS - W) ~ EFG_PCT, team_data))
 
